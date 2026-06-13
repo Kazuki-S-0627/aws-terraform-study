@@ -3,9 +3,9 @@
 手動で構築したAWSのネットワーク環境（VPC、サブネット、NATゲートウェイ、EC2）を、Terraformを用いて完全自動化（IaC化）した学習記録です。
 
 ## 📝 構成図
-![アーキテクチャ図](./rchitecture.drawio.png)
+![アーキテクチャ図](./images/rchitecture.drawio.png)
 
-![Nginx接続成功画面](./nginx.png)
+![Nginx接続成功画面](./images/nginx.png)
 ## 🛠️ 使用技術
 * **インフラプロバイダー:** AWS (Amazon Web Services)
 * **IaCツール:** Terraform
