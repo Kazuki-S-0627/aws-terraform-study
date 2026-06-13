@@ -11,7 +11,7 @@ resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.1.0/24"
   availability_zone       = "ap-northeast-1a"
-  map_public_ip_on_launch = true # ここに立てたEC2には自動でパブリックIPを付与する
+  map_public_ip_on_launch = true # ここに立てたEC2に自動でパブリックIPを付与
 
   tags = {
     Name = "public-subnet"
@@ -35,7 +35,7 @@ resource "aws_internet_gateway" "igw" {
     Name = "bastion-igw"
   }
 }
-# パブリックサブネット用のルートテーブル（地図）
+# パブリックサブネット用のルートテーブル
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
@@ -44,28 +44,26 @@ resource "aws_route_table" "public" {
   }
 }
 
-# インターネットへの道案内（ルート）
+# インターネットゲートウェイ
 resource "aws_route" "public_igw" {
   route_table_id         = aws_route_table.public.id
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.igw.id
 }
 
-# パブリックサブネットに地図を配る（関連付け）
+# パブリックサブネットに関連付け
 resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
 }
-# ==========================================
-# 1. NATゲートウェイとプライベートルート
-# ==========================================
+# NATゲートウェイとプライベートルート
 # NATゲートウェイ用の固定IP（Elastic IP）
 resource "aws_eip" "nat" {
   domain = "vpc"
   tags   = { Name = "bastion-nat-eip" }
 }
 
-# NATゲートウェイ（パブリックサブネットに配置）
+# NATゲートウェイ(パブリックサブネット)
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public.id
@@ -78,23 +76,19 @@ resource "aws_route_table" "private" {
   tags   = { Name = "private-rt" }
 }
 
-# プライベートからNATへの道案内
+# プライベートからNATへのルート
 resource "aws_route" "private_nat" {
   route_table_id         = aws_route_table.private.id
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id         = aws_nat_gateway.main.id
 }
 
-# プライベートサブネットに地図を配る
+# プライベートサブネットに関連づけ
 resource "aws_route_table_association" "private" {
   subnet_id      = aws_subnet.private.id
   route_table_id = aws_route_table.private.id
 }
-
-
-# ==========================================
-# 2. セキュリティグループ（ファイアウォール）
-# ==========================================
+# セキュリティグループ（FW）
 # 踏み台サーバー用（外部からのSSHを許可）
 resource "aws_security_group" "bastion" {
   name        = "bastion-sg"
@@ -105,7 +99,7 @@ resource "aws_security_group" "bastion" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # ※本来は自分のPCのIPに絞るのが安全です
+    cidr_blocks = ["0.0.0.0/0"] 
   }
 
   egress {
@@ -145,12 +139,8 @@ resource "aws_security_group" "web" {
   }
   tags = { Name = "web-sg" }
 }
-
-
-# ==========================================
-# 3. EC2インスタンス
-# ==========================================
-# 最新のAmazon Linux 2023のAMIを自動取得する設定
+# EC2インスタンス
+# 最新のAmazon Linux 2023のAMIを自動取得
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
@@ -167,7 +157,7 @@ resource "aws_instance" "bastion" {
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.bastion.id]
   
-  key_name = "bastion-key" # ※手動で作ったキーペア（.pem）の名前をここに入力してください（拡張子不要）
+  key_name = "bastion-key" 
 
   tags = { Name = "bastion-ec2" }
 }
@@ -179,9 +169,9 @@ resource "aws_instance" "web" {
   subnet_id              = aws_subnet.private.id
   vpc_security_group_ids = [aws_security_group.web.id]
 
-  key_name = "bastion-key" # ※踏み台と同じキーペア名を指定
+  key_name = "bastion-key" 
 
-  # 【魔法の設定】起動時に自動でNginxをインストールするスクリプト
+  # Nginxをインストールするスクリプト
   user_data = <<-EOF
               #!/bin/bash
               dnf update -y
