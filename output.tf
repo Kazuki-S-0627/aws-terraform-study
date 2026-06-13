@@ -4,7 +4,7 @@ output "vpc_id" {
 
 output "bastion_public_ip" {
   value       = aws_instance.bastion.public_ip
-  description = "踏み台サーバーのパブリックIP（ここにSSH接続します）"
+  description = "踏み台サーバーのパブリックIP（ここにSSH接続）"
 }
 
 output "web_private_ip" {
