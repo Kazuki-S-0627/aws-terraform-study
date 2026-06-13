@@ -4,8 +4,8 @@
 
 ## 📝 構成図
 ![アーキテクチャ図](./rchitecture.drawio.png)
-*(※ここに構成図の画像を載せます)*
 
+![Nginx接続成功画面](./nginx.png)
 ## 🛠️ 使用技術
 * **インフラプロバイダー:** AWS (Amazon Web Services)
 * **IaCツール:** Terraform
@@ -25,4 +25,4 @@
    terraform init
    terraform plan
 
-   ![Nginx接続成功画面](./nginx.png)
+   
