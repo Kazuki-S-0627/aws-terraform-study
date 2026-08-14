@@ -1,9 +1,10 @@
-# AWSプロバイダーの設定
 provider "aws" {
-  region = "ap-northeast-1" # 東京リージョン
+  region = var.aws_region
 }
+
 terraform {
   required_version = ">= 1.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"

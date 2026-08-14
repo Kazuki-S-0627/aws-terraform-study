@@ -1,105 +1,183 @@
-# VPCの定義
+# ==============================
+# VPC
+# ==============================
+
 resource "aws_vpc" "main" {
-  cidr_block = "10.0.0.0/16"
+  cidr_block = var.vpc_cidr
 
   tags = {
-    Name = "bastion-demo-vpc"
+    Name        = "${var.project_name}-${var.environment}-vpc"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
   }
 }
-# パブリックサブネット
+
+
+# ==============================
+# Public Subnet
+# ==============================
+
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "ap-northeast-1a"
-  map_public_ip_on_launch = true # ここに立てたEC2に自動でパブリックIPを付与
+  cidr_block              = var.public_subnet_cidr
+  availability_zone       = var.availability_zone
+  map_public_ip_on_launch = true
 
   tags = {
-    Name = "public-subnet"
+    Name        = "${var.project_name}-${var.environment}-public-subnet"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
   }
 }
-# プライベートサブネット
+
+
+# ==============================
+# Private Subnet
+# ==============================
+
 resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = "ap-northeast-1a"
+  cidr_block        = var.private_subnet_cidr
+  availability_zone = var.availability_zone
 
   tags = {
-    Name = "private-subnet"
+    Name        = "${var.project_name}-${var.environment}-private-subnet"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
   }
 }
-# インターネットゲートウェイ
+
+
+# ==============================
+# Internet Gateway
+# ==============================
+
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "bastion-igw"
+    Name        = "${var.project_name}-${var.environment}-igw"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
   }
 }
-# パブリックサブネット用のルートテーブル
+
+
+# ==============================
+# Public Route Table
+# ==============================
+
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "public-rt"
+    Name        = "${var.project_name}-${var.environment}-public-rt"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
   }
 }
 
-# インターネットゲートウェイ
+
+# Public Subnet -> Internet Gateway
 resource "aws_route" "public_igw" {
   route_table_id         = aws_route_table.public.id
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.igw.id
 }
 
-# パブリックサブネットに関連付け
+
+# Public SubnetとRoute Tableを関連付け
 resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
   route_table_id = aws_route_table.public.id
 }
-# NATゲートウェイとプライベートルート
-# NATゲートウェイ用の固定IP（Elastic IP）
+
+
+# ==============================
+# NAT Gateway
+# ==============================
+
 resource "aws_eip" "nat" {
   domain = "vpc"
-  tags   = { Name = "bastion-nat-eip" }
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-nat-eip"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
 }
 
-# NATゲートウェイ(パブリックサブネット)
+
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public.id
-  tags          = { Name = "bastion-nat" }
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-nat"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+
+  depends_on = [aws_internet_gateway.igw]
 }
 
-# プライベートサブネット用のルートテーブル
+
+# ==============================
+# Private Route Table
+# ==============================
+
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "private-rt" }
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-private-rt"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
 }
 
-# プライベートからNATへのルート
+
+# Private Subnet -> NAT Gateway
 resource "aws_route" "private_nat" {
   route_table_id         = aws_route_table.private.id
   destination_cidr_block = "0.0.0.0/0"
   nat_gateway_id         = aws_nat_gateway.main.id
 }
 
-# プライベートサブネットに関連づけ
+
+# Private SubnetとRoute Tableを関連付け
 resource "aws_route_table_association" "private" {
   subnet_id      = aws_subnet.private.id
   route_table_id = aws_route_table.private.id
 }
-# セキュリティグループ（FW）
-# 踏み台サーバー用（外部からのSSHを許可）
+
+
+# ==============================
+# Security Group - Bastion
+# ==============================
+
 resource "aws_security_group" "bastion" {
-  name        = "bastion-sg"
+  name        = "${var.project_name}-${var.environment}-bastion-sg"
   description = "Allow SSH inbound traffic"
   vpc_id      = aws_vpc.main.id
 
   ingress {
+    description = "SSH access"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] 
+
+    # 現在は学習環境用。
+    # 後のStepでBastionを廃止してSSMへ変更する。
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -108,23 +186,37 @@ resource "aws_security_group" "bastion" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  tags = { Name = "bastion-sg" }
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-bastion-sg"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
 }
 
-# Webサーバー用（踏み台からのSSHと、Webアクセスを許可）
+
+# ==============================
+# Security Group - Web Server
+# ==============================
+
 resource "aws_security_group" "web" {
-  name        = "web-sg"
+  name        = "${var.project_name}-${var.environment}-web-sg"
   description = "Allow SSH from Bastion and HTTP"
   vpc_id      = aws_vpc.main.id
 
+  # SSHはBastion Security Groupからのみ許可
   ingress {
+    description     = "SSH from Bastion"
     from_port       = 22
     to_port         = 22
     protocol        = "tcp"
-    security_groups = [aws_security_group.bastion.id] # 踏み台からのみ許可
+    security_groups = [aws_security_group.bastion.id]
   }
 
+  # HTTP
   ingress {
+    description = "HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -137,48 +229,77 @@ resource "aws_security_group" "web" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  tags = { Name = "web-sg" }
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-web-sg"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
 }
-# EC2インスタンス
-# 最新のAmazon Linux 2023のAMIを自動取得
+
+
+# ==============================
+# Amazon Linux 2023 AMI
+# ==============================
+
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
+
   filter {
     name   = "name"
     values = ["al2023-ami-2023.*-x86_64"]
   }
 }
 
-# 踏み台サーバー (Bastion EC2)
+
+# ==============================
+# Bastion EC2
+# ==============================
+
 resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = "t3.micro"
+  instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.bastion.id]
-  
-  key_name = "bastion-key" 
 
-  tags = { Name = "bastion-ec2" }
+  key_name = var.key_name
+
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-bastion"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
 }
 
-# Webサーバー (Private EC2)
+
+# ==============================
+# Web Server EC2
+# ==============================
+
 resource "aws_instance" "web" {
   ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = "t3.micro"
+  instance_type          = var.instance_type
   subnet_id              = aws_subnet.private.id
   vpc_security_group_ids = [aws_security_group.web.id]
 
-  key_name = "bastion-key" 
+  key_name = var.key_name
 
-  # Nginxをインストールするスクリプト
+  # Nginxを自動インストール
   user_data = <<-EOF
               #!/bin/bash
               dnf update -y
               dnf install -y nginx
-              systemctl start nginx
               systemctl enable nginx
+              systemctl start nginx
               EOF
 
-  tags = { Name = "web-server" }
+  tags = {
+    Name        = "${var.project_name}-${var.environment}-web"
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
 }
